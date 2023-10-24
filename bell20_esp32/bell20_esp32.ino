@@ -58,8 +58,8 @@ enum class Event {
 
 Status space_status = Status::Unknown;
 Event last_event = Event::Nothing;
-int32_t last_status_send = -1;
-int32_t last_ringing = -1;
+int64_t last_status_send = -1;
+int64_t last_ringing = -1;
 
 // callback for subscribed topics
 static void mqtt_callback(const char* const topic, const byte* const payload, const unsigned int length) {
