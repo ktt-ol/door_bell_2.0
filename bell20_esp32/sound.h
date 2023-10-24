@@ -168,11 +168,16 @@ class SongPlayer {
         return true;
 
       const auto note = parser.next();
-      if (! note)
+      if (! note) {
+        digitalWrite(sound_pin, LOW);
         return false;
-      
-      if (note->frequency)
+      }
+
+      if (note->frequency) {
         tone(sound_pin, note->frequency, note->duration);
+      } else {
+          digitalWrite(sound_pin, LOW);
+      }
       note_start = millis();
       note_duration = note->duration;
       return true;
