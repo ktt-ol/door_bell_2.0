@@ -173,6 +173,21 @@ void loop() {
             c = 'B';
             break;
         }
+      } else if (is_playing) {
+        switch (space_status) {
+          case Status::Open:
+            c = 'g';
+            break;
+          case Status::Closing:
+            c = 'y';
+            break;
+          case Status::Closed:
+            c = 'r';
+            break;
+          case Status::Unknown:
+            c = 'm';
+            break;
+        }
       } else {
         switch (space_status) {
           case Status::Open:
@@ -213,8 +228,9 @@ void loop() {
     if (msg->button) {
       // debugSerial.print(" B");
       // debugSerial.print(*msg->button);
-      if (! is_playing && last_event == Event::Nothing) {
+      if (last_event == Event::Nothing)
         last_event = Event::Ring;
+      if (! is_playing) {
         sound.start_play(SONGS[song]);
         song = (song + 1) % NUM_SONGS;
       }
