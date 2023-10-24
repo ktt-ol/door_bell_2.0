@@ -4,14 +4,16 @@
 #include <PubSubClient.h>
 #include <ArduinoOTA.h>
 
-#define SSerialTxControl 10   // RS485 Direction control
+#define RS485_DE    10
 
-#define RS485Transmit    HIGH
-#define RS485Receive     LOW
+#define RS485Transmit   HIGH
+#define RS485Receive    LOW
 
 #define LED_BLUE    6
 #define LED_GREEN   5
 #define LED_RED     4
+
+#define SPEAKER     3
 
 #include "arbiter.h"
 #include "cert.h"
@@ -32,7 +34,7 @@ WiFiMulti wifi;
 WiFiClientSecure secure;
 PubSubClient mqtt_client(MQTT_HOST, MQTT_PORT, secure);
 
-SongPlayer sound(3);
+SongPlayer sound(SPEAKER);
 
 Arbiter arbiter;
 
@@ -95,9 +97,11 @@ static void mqtt_callback(const char* const topic, const byte* const payload, co
 
 
 void setup() {
-  pinMode(5, OUTPUT);
-  pinMode(SSerialTxControl, OUTPUT);
-  digitalWrite(SSerialTxControl, RS485Receive);
+  pinMode(RS485_DE, OUTPUT);
+  digitalWrite(RS485_DE, RS485Receive);
+
+  pinMode(SPEAKER, OUTPUT);
+  digitalWrite(SPEAKER, LOW);
 
   pinMode(LED_BLUE, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
