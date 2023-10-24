@@ -31,6 +31,8 @@ const int MQTT_PORT = 8884;
 const char* const STATUS_TOPIC = "/access-control-system/space-state";
 const char* const MAIN_DOOR_TOPIC = "/access-control-system/main-door/reed-switch";
 
+const unsigned long SILENCE_PERIOD = 40000; // milliseconds
+
 WiFiMulti wifi;
 WiFiClientSecure secure;
 PubSubClient mqtt_client(MQTT_HOST, MQTT_PORT, secure);
@@ -50,12 +52,14 @@ enum class Status {
 enum class Event {
   Nothing = 0,
   Ring,
+  NoRing,
   Door,
 };
 
 Status space_status = Status::Unknown;
 Event last_event = Event::Nothing;
 int32_t last_status_send = -1;
+int32_t last_ringing = -1;
 
 // callback for subscribed topics
 static void mqtt_callback(const char* const topic, const byte* const payload, const unsigned int length) {
@@ -161,6 +165,9 @@ void loop() {
           case Event::Ring:
             c = 'W';
             break;
+          case Event::NoRing:
+            c = 'M';
+            break;
           case Event::Door:
             c = 'B';
             break;
@@ -208,6 +215,9 @@ void loop() {
     }
   }
 
+  if (last_ringing >= 0 && millis() - (unsigned long)last_ringing > SILENCE_PERIOD)
+    last_ringing = -1;
+
   if (msg) {
     // debugSerial.print("a");
     // debugSerial.print(msg->address);
@@ -222,9 +232,14 @@ void loop() {
     if (msg->button) {
       // debugSerial.print(" B");
       // debugSerial.print(*msg->button);
-      if (last_event == Event::Nothing)
-        last_event = Event::Ring;
-      if (! is_playing) {
+      if (last_event == Event::Nothing) {
+        if (is_playing || last_ringing == -1)
+          last_event = Event::Ring;
+        else
+          last_event = Event::NoRing;
+      }
+      if (! is_playing && last_ringing == -1) {
+        last_ringing = millis();
         sound.start_play(SONGS[song]);
         song = (song + 1) % NUM_SONGS;
       }
