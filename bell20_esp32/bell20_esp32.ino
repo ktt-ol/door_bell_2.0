@@ -17,6 +17,7 @@
 
 #include "arbiter.h"
 #include "cert.h"
+#include "led.h"
 #include "sound.h"
 #include "songs.h"
 
@@ -35,6 +36,7 @@ WiFiClientSecure secure;
 PubSubClient mqtt_client(MQTT_HOST, MQTT_PORT, secure);
 
 SongPlayer sound(SPEAKER);
+Led led(LED_RED, LED_GREEN, LED_BLUE);
 
 Arbiter arbiter;
 
@@ -68,19 +70,13 @@ static void mqtt_callback(const char* const topic, const byte* const payload, co
     Status new_status = Status::Unknown;
     if (!strncmp(status, "open", length) || !strncmp(status, "open+", length)) {
       new_status = Status::Open;
-      digitalWrite(LED_BLUE,HIGH);
-      digitalWrite(LED_GREEN,LOW);
-      digitalWrite(LED_RED,HIGH);
+      led.set_color(LedColor::GREEN);
     } else if (!strncmp(status, "none", length)) {
       new_status = Status::Closed;
-      digitalWrite(LED_BLUE,HIGH);
-      digitalWrite(LED_GREEN,HIGH);
-      digitalWrite(LED_RED,LOW);
+      led.set_color(LedColor::RED);
     } else if (!strncmp(status, "closing", length)) {
       new_status = Status::Closing;
-      digitalWrite(LED_BLUE,HIGH);
-      digitalWrite(LED_GREEN,HIGH);
-      digitalWrite(LED_RED,LOW);
+      led.set_color(LedColor::YELLOW);
     } else {
       new_status = Status::Unknown;
     }
@@ -106,9 +102,7 @@ void setup() {
   pinMode(LED_BLUE, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_RED, OUTPUT);
-  digitalWrite(LED_BLUE,LOW);
-  digitalWrite(LED_GREEN,HIGH);
-  digitalWrite(LED_RED,HIGH);
+  led.set_color(LedColor::BLUE);
 
   // debugSerial.begin(115200);
   // debugSerial.println();
@@ -149,9 +143,7 @@ void loop() {
   if (not_connected_since < 0 && !mqtt_client.loop()) {
     // debugSerial.println("Connecting to MQTT server...");
     if (mqtt_client.connect("DoorBell20")) {
-      digitalWrite(LED_BLUE,LOW);
-      digitalWrite(LED_GREEN,LOW);
-      digitalWrite(LED_RED,HIGH);
+      led.set_color(LedColor::CYAN);
       mqtt_client.subscribe(STATUS_TOPIC);
       mqtt_client.subscribe(MAIN_DOOR_TOPIC);
     }
@@ -204,6 +196,8 @@ void loop() {
             break;
         }
       }
+
+      led.set_color(c);
 
       char buf[16];
       snprintf(buf, sizeof(buf), "Ac C%c L%u", c, 5);
