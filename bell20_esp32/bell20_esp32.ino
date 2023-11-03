@@ -20,6 +20,7 @@
 #include "led.h"
 #include "sound.h"
 #include "songs.h"
+#include "space_status.h"
 
 const char *const SSID0 = "mainframe.iot";
 const char *const SSID0_PASSWORD = "TODO";
@@ -29,6 +30,7 @@ const char *const MQTT_HOST = "spacegate.mainframe.io";
 const int MQTT_PORT = 8884;
 
 const char* const STATUS_TOPIC = "/access-control-system/space-state";
+const char* const STATUS_NEXT_TOPIC = "/access-control-system/space-state-next";
 const char* const MAIN_DOOR_TOPIC = "/access-control-system/main-door/reed-switch";
 
 const unsigned long SILENCE_PERIOD = 40000; // milliseconds
@@ -42,13 +44,6 @@ Led led(LED_RED, LED_GREEN, LED_BLUE);
 
 Arbiter arbiter;
 
-enum class Status {
-  Unknown = 0,
-  Open,
-  Closed,
-  Closing,
-};
-
 enum class Event {
   Nothing = 0,
   Ring,
@@ -56,7 +51,9 @@ enum class Event {
   Door,
 };
 
-Status space_status = Status::Unknown;
+SpaceStatus space_status = SpaceStatus::Unknown;
+SpaceStatus next_status = SpaceStatus::Unknown;
+
 Event last_event = Event::Nothing;
 int64_t last_status_send = -1;
 int64_t last_ringing = -1;
@@ -65,33 +62,24 @@ int64_t last_ringing = -1;
 static void mqtt_callback(const char* const topic, const byte* const payload, const unsigned int length) {
   const char* const status = (const char*) payload;
 
-  // debugSerial.print(topic);
-  // debugSerial.print(" => ");
-
-  // Ignore anything but the space state
+  SpaceStatus new_space_status = space_status;
+  SpaceStatus new_next_status = next_status;
   if (!strcmp(topic, STATUS_TOPIC)) {
-    // debugSerial.println("Status topic matches!");
-    Status new_status = Status::Unknown;
-    if (!strncmp(status, "open", length) || !strncmp(status, "open+", length)) {
-      new_status = Status::Open;
-      led.set_color(LedColor::GREEN);
-    } else if (!strncmp(status, "none", length)) {
-      new_status = Status::Closed;
-      led.set_color(LedColor::RED);
-    } else if (!strncmp(status, "closing", length)) {
-      new_status = Status::Closing;
-      led.set_color(LedColor::YELLOW);
-    } else {
-      new_status = Status::Unknown;
-    }
-
-    if (new_status != space_status) {
-      // debugSerial.printf("Status changed to %u\n", new_status);
-      space_status = new_status;
-      last_status_send = -1;
-    }
+    new_space_status = from_string(status, length);
+  } else if (!strcmp(topic, STATUS_NEXT_TOPIC)) {
+    new_next_status = from_string(status, length);
   } else if (!strcmp(topic, MAIN_DOOR_TOPIC)) {
     // last_event = Event::Door;
+  }
+
+  if (new_space_status != space_status) {
+    space_status = new_space_status;
+    last_status_send = -1;
+  }
+
+  if (new_next_status != next_status) {
+    next_status = new_next_status;
+    last_status_send = -1;
   }
 } // callback
 
@@ -138,7 +126,7 @@ void loop() {
       if (ts - (unsigned long)not_connected_since > MAX_NOT_CONNECTED_TIME) {
         not_connected_since = ts - MAX_NOT_CONNECTED_TIME;
         // debugSerial.println("WiFi is not connected for long time, status unknown");
-        space_status = Status::Unknown;
+        space_status = SpaceStatus::Unknown;
         last_status_send = -1;
       }
     }
@@ -149,6 +137,7 @@ void loop() {
     if (mqtt_client.connect("DoorBell20")) {
       led.set_color(LedColor::CYAN);
       mqtt_client.subscribe(STATUS_TOPIC);
+      mqtt_client.subscribe(STATUS_NEXT_TOPIC);
       mqtt_client.subscribe(MAIN_DOOR_TOPIC);
     }
   }
@@ -172,36 +161,35 @@ void loop() {
             c = 'B';
             break;
         }
-      } else if (is_playing) {
-        switch (space_status) {
-          case Status::Open:
-            c = 'g';
-            break;
-          case Status::Closing:
-            c = 'y';
-            break;
-          case Status::Closed:
-            c = 'r';
-            break;
-          case Status::Unknown:
-            c = 'm';
-            break;
-        }
       } else {
         switch (space_status) {
-          case Status::Open:
-            c = 'G';
+          case SpaceStatus::Open:
+          case SpaceStatus::OpenPlus:
+            switch (next_status) {
+              case SpaceStatus::Closed:
+              case SpaceStatus::Keyholder:
+                c = 'Y';
+                break;
+              default:
+                c = 'G';
+                break;
+            }
             break;
-          case Status::Closing:
+          case SpaceStatus::Keyholder:
             c = 'Y';
             break;
-          case Status::Closed:
+          case SpaceStatus::Member:
+            c = 'C';
+            break;
+          case SpaceStatus::Closed:
             c = 'R';
             break;
-          case Status::Unknown:
+          case SpaceStatus::Unknown:
             c = 'M';
             break;
         }
+        if (is_playing)
+          c = tolower(c);
       }
 
       led.set_color(c);
