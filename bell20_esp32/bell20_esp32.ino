@@ -24,10 +24,16 @@
 
 const char *const SSID0 = "mainframe.iot";
 const char *const SSID0_PASSWORD = "TODO";
+
 const unsigned long MAX_NOT_CONNECTED_TIME = 20*1000; // milliseconds
 const unsigned long STATUS_SEND_PERIOD = 1*1000; // milliseconds
+
 const char *const MQTT_HOST = "spacegate.mainframe.io";
 const int MQTT_PORT = 8884;
+
+const char *const TIMEZONE = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00"; // Europe/Berlin
+const char* const NTP_SERVER_1 = "ntp.lan.mainframe.io";
+const char* const NTP_SERVER_2 = "de.pool.ntp.org";
 
 const char* const STATUS_TOPIC = "/access-control-system/space-state";
 const char* const STATUS_NEXT_TOPIC = "/access-control-system/space-state-next";
@@ -112,12 +118,14 @@ void setup() {
 }
 
 int32_t not_connected_since = -1;
+bool ntp_connected = false;
 size_t song = 0;
 
 void loop() {
   if (wifi.run() == WL_CONNECTED) {
     not_connected_since = -1;
   } else {
+    ntp_connected = false;
     unsigned long ts = millis();
     if (not_connected_since < 0) {
       // debugSerial.println("WiFi connection is interrupted");
@@ -130,6 +138,11 @@ void loop() {
         last_status_send = -1;
       }
     }
+  }
+
+  if (not_connected_since < 0 && !ntp_connected) {
+    configTzTime(TIMEZONE, NTP_SERVER_1, NTP_SERVER_2);
+    ntp_connected = true;
   }
 
   if (not_connected_since < 0 && !mqtt_client.loop()) {
