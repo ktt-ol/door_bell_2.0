@@ -119,40 +119,46 @@ void setup() {
 }
 
 int32_t not_connected_since = -1;
+bool wifi_connected = false;
 bool ntp_connected = false;
 bool mqtt_connected = false;
 int32_t mqtt_last_failure = -1;
 size_t song = 0;
 
+static void disconnected() {
+  unsigned long ts = millis();
+  if (not_connected_since < 0) {
+    not_connected_since = ts;
+  } else {
+    if (ts - (unsigned long)not_connected_since > MAX_NOT_CONNECTED_TIME) {
+      not_connected_since = ts - MAX_NOT_CONNECTED_TIME;
+      space_status = SpaceStatus::Unknown;
+      next_status = SpaceStatus::Unknown;
+      last_status_send = -1;
+    }
+  }
+}
+
 void loop() {
   if (wifi.run() == WL_CONNECTED) {
-    not_connected_since = -1;
+    wifi_connected = true;
   } else {
+    disconnected();
+    wifi_connected = false;
     ntp_connected = false;
     mqtt_connected = false;
     mqtt_last_failure = -1;
-    unsigned long ts = millis();
-    if (not_connected_since < 0) {
-      // debugSerial.println("WiFi connection is interrupted");
-      not_connected_since = ts;
-    } else {
-      if (ts - (unsigned long)not_connected_since > MAX_NOT_CONNECTED_TIME) {
-        not_connected_since = ts - MAX_NOT_CONNECTED_TIME;
-        // debugSerial.println("WiFi is not connected for long time, status unknown");
-        space_status = SpaceStatus::Unknown;
-        last_status_send = -1;
-      }
+  }
+
+  if (wifi_connected) {
+    if (!ntp_connected) {
+      configTzTime(TIMEZONE, NTP_SERVER_1, NTP_SERVER_2);
+      ntp_connected = true;
     }
-  }
 
-  if (not_connected_since < 0 && !ntp_connected) {
-    configTzTime(TIMEZONE, NTP_SERVER_1, NTP_SERVER_2);
-    ntp_connected = true;
-  }
-
-  if (not_connected_since < 0) {
     if (mqtt_connected) {
       if (!mqtt_client.loop()) {
+        disconnected();
         mqtt_connected = false;
         mqtt_last_failure = -1;
       }
@@ -161,6 +167,7 @@ void loop() {
     if (!mqtt_connected) {
       if (mqtt_last_failure < 0 || millis() - (unsigned long)mqtt_last_failure > MQTT_ATTEMPT_WAIT_TIME) {
         if (mqtt_client.connect("DoorBell20")) {
+          not_connected_since = -1;
           mqtt_connected = true;
           led.set_color(LedColor::CYAN);
           mqtt_client.subscribe(STATUS_TOPIC);
