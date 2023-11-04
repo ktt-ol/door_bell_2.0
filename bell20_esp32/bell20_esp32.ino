@@ -42,6 +42,8 @@ const char* const MAIN_DOOR_TOPIC = "/access-control-system/main-door/reed-switc
 
 const unsigned long SILENCE_PERIOD = 40000; // milliseconds
 
+const unsigned long BUS_PANIC_PERIOD = 3000; // milliseconds
+
 WiFiMulti wifi;
 WiFiClientSecure secure;
 PubSubClient mqtt_client(MQTT_HOST, MQTT_PORT, secure);
@@ -64,6 +66,7 @@ SpaceStatus next_status = SpaceStatus::Unknown;
 Event last_event = Event::Nothing;
 int64_t last_status_send = -1;
 int64_t last_ringing = -1;
+int64_t last_rs485_timestamp = -1;
 
 // callback for subscribed topics
 static void mqtt_callback(const char* const topic, const byte* const payload, const unsigned int length) {
@@ -183,8 +186,8 @@ void loop() {
   const bool is_playing = sound.loop();
 
   const auto msg = arbiter.recv();
+  unsigned long ts = millis();
   if (arbiter.can_send()) {
-    unsigned long ts = millis();
     if ((bool)last_event || last_status_send < 0 || ts - (unsigned long)last_status_send > STATUS_SEND_PERIOD) {
       uint8_t c = 'x';
       if ((bool)last_event) {
@@ -245,8 +248,8 @@ void loop() {
     last_ringing = -1;
 
   if (msg) {
-    // debugSerial.print("a");
-    // debugSerial.print(msg->address);
+    last_rs485_timestamp = ts;
+
     if (msg->temperature) {
       // debugSerial.print(" t");
       // debugSerial.print(*msg->temperature);
@@ -256,8 +259,6 @@ void loop() {
       // debugSerial.print(*msg->voltage);
     }
     if (msg->button) {
-      // debugSerial.print(" B");
-      // debugSerial.print(*msg->button);
       if (last_event == Event::Nothing) {
         if (is_playing || last_ringing == -1)
           last_event = Event::Ring;
@@ -271,5 +272,9 @@ void loop() {
       }
     }
     // debugSerial.println();
+  }
+
+  if (ts - (unsigned long)last_rs485_timestamp > BUS_PANIC_PERIOD) {
+    led.set_color(LedColor::MAGENTA);
   }
 }
