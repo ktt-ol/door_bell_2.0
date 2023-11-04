@@ -30,6 +30,7 @@ const unsigned long STATUS_SEND_PERIOD = 1*1000; // milliseconds
 
 const char *const MQTT_HOST = "spacegate.mainframe.io";
 const int MQTT_PORT = 8884;
+const unsigned long MQTT_ATTEMPT_WAIT_TIME = 1*1000; // milliseconds
 
 const char *const TIMEZONE = "CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00"; // Europe/Berlin
 const char* const NTP_SERVER_1 = "ntp.lan.mainframe.io";
@@ -119,6 +120,8 @@ void setup() {
 
 int32_t not_connected_since = -1;
 bool ntp_connected = false;
+bool mqtt_connected = false;
+int32_t mqtt_last_failure = -1;
 size_t song = 0;
 
 void loop() {
@@ -126,6 +129,8 @@ void loop() {
     not_connected_since = -1;
   } else {
     ntp_connected = false;
+    mqtt_connected = false;
+    mqtt_last_failure = -1;
     unsigned long ts = millis();
     if (not_connected_since < 0) {
       // debugSerial.println("WiFi connection is interrupted");
@@ -145,13 +150,26 @@ void loop() {
     ntp_connected = true;
   }
 
-  if (not_connected_since < 0 && !mqtt_client.loop()) {
-    // debugSerial.println("Connecting to MQTT server...");
-    if (mqtt_client.connect("DoorBell20")) {
-      led.set_color(LedColor::CYAN);
-      mqtt_client.subscribe(STATUS_TOPIC);
-      mqtt_client.subscribe(STATUS_NEXT_TOPIC);
-      mqtt_client.subscribe(MAIN_DOOR_TOPIC);
+  if (not_connected_since < 0) {
+    if (mqtt_connected) {
+      if (!mqtt_client.loop()) {
+        mqtt_connected = false;
+        mqtt_last_failure = -1;
+      }
+    }
+
+    if (!mqtt_connected) {
+      if (mqtt_last_failure < 0 || millis() - (unsigned long)mqtt_last_failure > MQTT_ATTEMPT_WAIT_TIME) {
+        if (mqtt_client.connect("DoorBell20")) {
+          mqtt_connected = true;
+          led.set_color(LedColor::CYAN);
+          mqtt_client.subscribe(STATUS_TOPIC);
+          mqtt_client.subscribe(STATUS_NEXT_TOPIC);
+          mqtt_client.subscribe(MAIN_DOOR_TOPIC);
+        } else {
+          mqtt_last_failure = millis();
+        }
+      }
     }
   }
 
