@@ -16,7 +16,6 @@ class Arbiter {
     }
 
     void send(const char* bytes) {
-      addr = MY_ADDRESS;
       digitalWrite(RS485_DE, RS485Transmit);
       CRC32 crc(0x04c11db7, 0x00000000, 0xffffffff, false, false);
       Serial.print(':');
@@ -29,6 +28,8 @@ class Arbiter {
       Serial.printf("%08x\n", crc.getCRC());
       Serial.flush();
       digitalWrite(RS485_DE, RS485Receive);
+      addr = MY_ADDRESS;
+      timer = micros();
     }
 
     std::optional<Message> recv() {
@@ -43,11 +44,9 @@ class Arbiter {
         }
       } else {
         if (now - timer >= CYCLE) {
-          timer = now;
           parser.reset();
-          ++addr;
-          if (addr >= NUM_ADDRESSES)
-            addr = 0;
+          addr = (addr + (now - timer) / CYCLE) % NUM_ADDRESSES;
+          timer = now;
         }
       }
       return std::nullopt;
