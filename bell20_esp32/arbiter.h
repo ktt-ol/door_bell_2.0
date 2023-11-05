@@ -28,6 +28,8 @@ class Arbiter {
       Serial.printf("%08x\n", crc.getCRC());
       Serial.flush();
       digitalWrite(RS485_DE, RS485Receive);
+
+      idle = false;
       addr = MY_ADDRESS;
       timer = micros();
     }
@@ -36,6 +38,7 @@ class Arbiter {
       uint32_t now = micros();
       if (Serial.available()) {
         timer = now;
+        idle = false;
         const auto msg = parser.parse(Serial.read());
         if (msg) {
           parser.reset();
@@ -43,10 +46,12 @@ class Arbiter {
           return msg;
         }
       } else {
-        if (now - timer >= CYCLE) {
+        const uint32_t dt = idle ? 0 : SYMBOL;
+        if (now - timer >= CYCLE + dt) {
           parser.reset();
-          addr = (addr + (now - timer) / CYCLE) % NUM_ADDRESSES;
+          addr = (addr + (now - timer - dt) / CYCLE) % NUM_ADDRESSES;
           timer = now;
+          idle = true;
         }
       }
       return std::nullopt;
@@ -56,4 +61,5 @@ class Arbiter {
     Parser parser;
     int8_t addr;
     uint32_t timer;
+    bool idle;
 };
