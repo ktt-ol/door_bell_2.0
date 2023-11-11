@@ -171,7 +171,11 @@ void loop() {
 
     if (!mqtt_connected) {
       if (mqtt_last_failure < 0 || millis() - (unsigned long)mqtt_last_failure > MQTT_ATTEMPT_WAIT_TIME) {
-        if (mqtt_client.connect("DoorBell20")) {
+        static uint8_t mqtt_name_counter = 0;
+        char buf[64];
+        snprintf(buf, sizeof(buf), "DoorBell20_%03d", mqtt_name_counter);
+        mqtt_name_counter = (mqtt_name_counter + 1) % 1000;
+        if (mqtt_client.connect(buf)) {
           not_connected_since = -1;
           mqtt_connected = true;
           led.set_color(LedColor::CYAN);
