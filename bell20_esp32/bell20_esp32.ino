@@ -135,9 +135,11 @@ static void disconnected() {
   } else {
     if (ts - (unsigned long)not_connected_since > MAX_NOT_CONNECTED_TIME) {
       not_connected_since = ts - MAX_NOT_CONNECTED_TIME;
-      space_status = SpaceStatus::Unknown;
-      next_status = SpaceStatus::Unknown;
-      last_status_send = -1;
+      if (space_status != SpaceStatus::Unknown || next_status != SpaceStatus::Unknown) {
+        space_status = SpaceStatus::Unknown;
+        next_status = SpaceStatus::Unknown;
+        last_status_send = -1;
+      }
     }
   }
 }
